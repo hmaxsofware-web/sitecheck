@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SiteCheck</title>
+<style>
+  :root {
+    --bg: #F6F5F1;
+    --surface: #FFFFFF;
+    --border: #E2E0D8;
+    --text-primary: #1F1E1B;
+    --text-secondary: #6B6A63;
+    --accent: #0F6E56;
+    --danger: #A32D2D;
+    --warning: #854F0B;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text-primary);
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  .container { max-width: 640px; margin: 0 auto; padding: 3rem 1.5rem; }
+  header h1 { font-size: 28px; font-weight: 600; margin: 0 0 8px; }
+  .subtitle { color: var(--text-secondary); font-size: 15px; margin: 0 0 2rem; }
+  .input-card { display: flex; gap: 8px; }
+  input[type="text"] {
+    flex: 1; height: 44px; padding: 0 14px;
+    border: 1px solid var(--border); border-radius: var(--radius);
+    font-size: 15px; background: var(--surface);
+  }
+  input[type="text"]:focus { outline: none; border-color: var(--accent); }
+  button {
+    height: 44px; padding: 0 20px; border: none; border-radius: var(--radius);
+    background: var(--accent); color: white; font-size: 15px; font-weight: 500; cursor: pointer;
+  }
+  button:hover { opacity: 0.9; }
+  button:active { transform: scale(0.98); }
+  .error { color: var(--danger); font-size: 14px; margin-top: 10px; }
+  .loading { color: var(--text-secondary); font-size: 14px; margin-top: 1.5rem; }
+  .hidden { display: none; }
+  .results { margin-top: 1.5rem; }
+  .metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 1rem; }
+  .metric-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; }
+  .metric-label { font-size: 13px; color: var(--text-secondary); margin: 0 0 4px; }
+  .metric-value { font-size: 26px; font-weight: 600; margin: 0; }
+  .checks-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem 1.25rem; }
+  .checks-title { font-size: 14px; font-weight: 600; margin: 0 0 12px; }
+  .check-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
+  .check-row:last-child { border-bottom: none; }
+  .check-status { font-size: 12px; font-weight: 500; }
+</style>
+</head>
+<body>
+  <main class="container">
+    <header>
+      <h1>SiteCheck</h1>
+      <p class="subtitle">Check a website's core SEO health in seconds.</p>
+    </header>
+
+    <div class="input-card">
+      <input type="text" id="url-input" placeholder="example.com" autocomplete="off">
+      <button id="analyze-btn">Analyze</button>
+    </div>
+    <p id="error-msg" class="error hidden"></p>
+    <div id="loading" class="loading hidden">Analyzing your site...</div>
+
+    <section id="results" class="results hidden">
+      <div class="metrics">
+        <div class="metric-card">
+          <p class="metric-label">SEO score</p>
+          <p class="metric-value" id="score-val">0/100</p>
+        </div>
+        <div class="metric-card">
+          <p class="metric-label">Page speed</p>
+          <p class="metric-value" id="speed-val">0s</p>
+        </div>
+      </div>
+      <div class="checks-card">
+        <p class="checks-title">Checks</p>
+        <div id="checks-list"></div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const input = document.getElementById("url-input");
+    const btn = document.getElementById("analyze-btn");
+    const errorMsg = document.getElementById("error-msg");
+    const loading = document.getElementById("loading");
+    const results = document.getElementById("results");
+
+    btn.addEventListener("click", runAnalysis);
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") runAnalysis();
+    });
+
+    async function runAnalysis() {
+      const url = input.value.trim();
+      errorMsg.classList.add("hidden");
+      results.classList.add("hidden");
+
+      if (!url) {
+        showError("Enter a URL");
+        return;
+      }
+
+      loading.classList.remove("hidden");
+      btn.disabled = true;
+
+      try {
+        const res = await fetch("/api/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url }),
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          showError(data.error || "Something went wrong");
+          return;
+        }
+
+        renderResults(data);
+      } catch (err) {
+        showError("Couldn't connect to the server");
+      } finally {
+        loading.classList.add("hidden");
+        btn.disabled = false;
+      }
+    }
+
+    function showError(msg) {
+      errorMsg.textContent = msg;
+      errorMsg.classList.remove("hidden");
+    }
+
+    function renderResults(data) {
+      const scoreVal = document.getElementById("score-val");
+      scoreVal.textContent = `${data.score}/100`;
+      scoreVal.style.color = data.score >= 80 ? "#0F6E56" : data.score >= 60 ? "#854F0B" : "#A32D2D";
+
+      const speedVal = document.getElementById("speed-val");
+      speedVal.textContent = `${data.load_time}s`;
+      speedVal.style.color = data.load_time < 2 ? "#0F6E56" : "#854F0B";
+
+      const list = document.getElementById("checks-list");
+      list.innerHTML = "";
+      data.checks.forEach((check) => {
+        const row = document.createElement("div");
+        row.className = "check-row";
+        const color = check.pass ? "#0F6E56" : "#A32D2D";
+        row.innerHTML = `
+          <span>${check.name}</span>
+          <span class="check-status" style="color:${color}">${check.detail}</span>
+        `;
+        list.appendChild(row);
+      });
+
+      results.classList.remove("hidden");
+    }
+  </script>
+</body>
+</html>
