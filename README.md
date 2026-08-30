@@ -1,3 +1,5 @@
+**Live demo:** https://sitecheck-zk35.onrender.com
+
 # SiteCheck
 
 A lightweight Flask web app that checks a website's core on-page SEO health: title tag, meta description, image alt texts, mobile viewport tag, HTTPS, canonical tag, and page load time.
